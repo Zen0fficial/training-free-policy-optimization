@@ -455,12 +455,9 @@ def run_search(
     experiences_dir: str,
     query: str | list[str],
     top_k: int,
-    device: str | None,
     batch_size: int,
-    use_flash_attention_2: bool,
     instruction: str | None,
     index_dir: str | None,
-    rebuild_index: bool,
     engine: LLM | None = None,
     exclude_self: bool = True,
 ) -> list[dict] | list[list[dict]]:
