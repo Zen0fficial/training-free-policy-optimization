@@ -312,6 +312,18 @@ def encode_texts(model: LLM, texts: list[str], batch_size: int) -> np.ndarray:
 
 def cosine_topk(query_vec: np.ndarray, doc_matrix: np.ndarray, k: int) -> list[tuple[int, float]]:
     """Return top-k indices with scores from a normalized matrix using cosine similarity."""
+    # Defensive handling: empty matrix or vector
+    if doc_matrix is None or doc_matrix.size == 0 or doc_matrix.shape[0] == 0:
+        return []
+    if query_vec is None or query_vec.size == 0:
+        return []
+    # Dimension check for clear error messages
+    if doc_matrix.shape[1] != query_vec.reshape(-1).shape[0]:
+        raise ValueError(
+            f"cosine_topk dimension mismatch: doc_matrix shape={doc_matrix.shape}, "
+            f"query_vec shape={query_vec.shape}. This often indicates the index "
+            f"was built with a different embedding model or there are no documents."
+        )
     scores = (doc_matrix @ query_vec.reshape(-1, 1)).reshape(-1)
     if k >= len(scores):
         idx = np.argsort(-scores)
@@ -475,8 +487,20 @@ def run_search(
         query_texts = list(query)
         single = False
 
+    # If no documents/embeddings are available, return empty results shaped by the query input
+    if doc_emb is None or doc_emb.size == 0 or doc_emb.shape[0] == 0 or doc_emb.shape[1] == 0:
+        return [] if single else [[] for _ in query_texts]
+
     queries_for_embed = apply_instruction(query_texts, instruction)
     query_embs = encode_texts(engine, queries_for_embed, batch_size=max(1, min(len(queries_for_embed), 64)))
+
+    # Ensure embedding dimensions match between docs and queries for meaningful similarity
+    if query_embs.size > 0 and (doc_emb.shape[1] != query_embs.shape[1]):
+        raise ValueError(
+            f"Embedding dim mismatch between documents and queries: "
+            f"doc_emb.shape={doc_emb.shape}, query_embs.shape={query_embs.shape}. "
+            f"Rebuild the index with the same embedding engine/instruction used for queries."
+        )
 
     def build_results_for_query(qvec: np.ndarray) -> list[dict]:
         top = cosine_topk(qvec, doc_emb, top_k)
