@@ -3,3 +3,29 @@
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Test/coverage caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Build artifacts
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE (JetBrains)
+.idea/
+
+# Environment files
+.env
