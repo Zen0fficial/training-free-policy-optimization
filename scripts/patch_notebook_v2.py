@@ -32,12 +32,9 @@ NEW_BLOCK = (
                         experiences_dir=EXPERIENCES_NEW_ROOT,
                         query=_problems,
                         top_k=_retrieve_k,
-                        device=None,
                         batch_size=EMBED_BATCH_SIZE,
-                        use_flash_attention_2=False,
                         instruction=EMBED_INSTRUCTION,
                         index_dir=EXPERIENCES_INDEX_DIR,
-                        rebuild_index=False,
                         engine=embed_engine,
                     )
 

@@ -6,7 +6,7 @@ NB_PATH = str(Path(__file__).resolve().parents[1] / "grpo_vllm_semiconductor.ipy
 MARK = "# === Evaluate NEW, compute deltas vs OLD, update scores, filter NEW, sync OLD ===\n"
 TRY_START = "            try:\n"
 TRY_END = "            except Exception as __e:\n                print(f\"[Step {step}] WARNING: NEW evaluation/filtering failed: {__e}\")\n"
-
+ 
 NEW_BLOCK = (
     "            # === Evaluate NEW vs OLD per problem; update OLD only when delta >= 0 ===\n"
     "            try:\n"
@@ -29,12 +29,9 @@ NEW_BLOCK = (
     "                        experiences_dir=EXPERIENCES_NEW_ROOT,\n"
     "                        query=_problems,\n"
     "                        top_k=_retrieve_k,\n"
-    "                        device=None,\n"
     "                        batch_size=EMBED_BATCH_SIZE,\n"
-    "                        use_flash_attention_2=False,\n"
     "                        instruction=EMBED_INSTRUCTION,\n"
     "                        index_dir=EXPERIENCES_INDEX_DIR,\n"
-    "                        rebuild_index=False,\n"
     "                        engine=embed_engine,\n"
     "                    )\n"
     "\n"
