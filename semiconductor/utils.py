@@ -462,6 +462,7 @@ def run_search(
     index_dir: str | None,
     rebuild_index: bool,
     engine: LLM | None = None,
+    exclude_self: bool = True,
 ) -> list[dict] | list[list[dict]]:
     # Use the provided experiences_dir strictly; no environment overrides.
     if index_dir:
@@ -494,6 +495,9 @@ def run_search(
     queries_for_embed = apply_instruction(query_texts, instruction)
     query_embs = encode_texts(engine, queries_for_embed, batch_size=max(1, min(len(queries_for_embed), 64)))
 
+    # Compute problem_key for each query to support excluding self
+    query_keys = [compute_problem_key(q) for q in query_texts]
+
     # Ensure embedding dimensions match between docs and queries for meaningful similarity
     if query_embs.size > 0 and (doc_emb.shape[1] != query_embs.shape[1]):
         raise ValueError(
@@ -502,7 +506,30 @@ def run_search(
             f"Rebuild the index with the same embedding engine/instruction used for queries."
         )
 
-    def build_results_for_query(qvec: np.ndarray) -> list[dict]:
+    def build_results_for_query(qvec: np.ndarray, exclude_key: str | None) -> list[dict]:
+        # Exclude self BEFORE selection by masking the doc matrix
+        if exclude_self and exclude_key:
+            mask = np.array([r.problem_key != exclude_key for r in records], dtype=bool)
+            if not mask.any():
+                return []
+            doc_sub = doc_emb[mask]
+            # Use fast top-k on the filtered sub-matrix
+            top = cosine_topk(qvec, doc_sub, top_k)
+            rec_sub = [r for r, keep in zip(records, mask) if keep]
+            out: list[dict] = []
+            for idx, score in top:
+                r = rec_sub[int(idx)]
+                out.append(
+                    {
+                        "score": score,
+                        "experience_id": r.experience_id,
+                        "text": r.text,
+                        "problem_key": r.problem_key,
+                        "source_file": r.source_file,
+                    }
+                )
+            return out
+        # Fallback: no exclusion, use fast top-k
         top = cosine_topk(qvec, doc_emb, top_k)
         out: list[dict] = []
         for idx, score in top:
@@ -518,7 +545,7 @@ def run_search(
             )
         return out
 
-    all_results = [build_results_for_query(query_embs[i]) for i in range(query_embs.shape[0])]
+    all_results = [build_results_for_query(query_embs[i], query_keys[i] if exclude_self else None) for i in range(query_embs.shape[0])]
     return all_results[0] if single else all_results
 
 
