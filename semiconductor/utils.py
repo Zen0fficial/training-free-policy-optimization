@@ -132,11 +132,9 @@ def load_experiences_for_prompt(problem: str, root_dir: str) -> dict[str, str]:
     - `root_dir` should be a directory like ".../experiences_by_problem".
     Returns an ID->text mapping or an empty dict when none exist.
     """
-    # Allow overriding the provided root_dir via environment for global control,
-    # e.g., to force reading from OLD experiences without changing callers.
-    eff_root = os.environ.get("EXPERIENCES_FORCE_DIR") or root_dir
+    # Use the provided root_dir strictly; no environment overrides.
     key = compute_problem_key(problem)
-    path = os.path.join(eff_root, f"{key}.json")
+    path = os.path.join(root_dir, f"{key}.json")
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
             try:
@@ -453,18 +451,17 @@ def run_search(
     rebuild_index: bool,
     engine: LLM | None = None,
 ) -> list[dict] | list[list[dict]]:
-    # Allow overriding the provided experiences_dir via environment for global control.
-    eff_dir = os.environ.get("EXPERIENCES_FORCE_DIR") or experiences_dir
+    # Use the provided experiences_dir strictly; no environment overrides.
     if index_dir:
         records, doc_emb = build_or_load_index(
-            experiences_dir=eff_dir,
+            experiences_dir=experiences_dir,
             index_dir=index_dir,
             model=engine,
             batch_size=batch_size,
             instruction=instruction,
         )
     else:
-        records = load_all_experiences(eff_dir)
+        records = load_all_experiences(experiences_dir)
         if not records:
             return []
         doc_texts = [r.text for r in records]

@@ -105,19 +105,6 @@ def build_prompts_map_from_dataset(data_path: str | None) -> dict[str, str]:
     return mapping
 
 
-def build_model(model_id: str, tensor_parallel_size: int | None = None, gpu_memory_utilization: float | None = None) -> LLM:
-    tp = tensor_parallel_size or int(os.environ.get("EMBED_TP_SIZE", os.environ.get("VLLM_TP_SIZE", 1)))
-    llm_kwargs: dict[str, object] = {
-        "model": model_id,
-        "task": "embed",
-        "trust_remote_code": True,
-        "tensor_parallel_size": max(1, int(tp)),
-    }
-    if gpu_memory_utilization is not None:
-        llm_kwargs["gpu_memory_utilization"] = float(gpu_memory_utilization)
-    return LLM(**llm_kwargs)
-
-
 def encode_texts(model: LLM, texts: list[str], batch_size: int) -> np.ndarray:
     if not texts:
         return np.zeros((0, 0), dtype=np.float32)
@@ -217,6 +204,8 @@ def main() -> None:
     parser.add_argument("--model-id", default="Qwen/Qwen3-Embedding-8B", help="Embedding model id for vLLM")
     parser.add_argument("--batch-size", type=int, default=0, help="Batch size for embedding texts (0=process all in one batch)")
     parser.add_argument("--tensor-parallel-size", type=int, default=1, help="Tensor parallel size for vLLM embedding engine")
+    parser.add_argument("--dtype", default="auto", help="dtype for embedding engine (e.g., auto, float16, bfloat16)")
+    parser.add_argument("--gpu-memory-utilization", type=float, default=0.1, help="GPU memory fraction for embedding engine (e.g., 0.1)")
 
     args = parser.parse_args()
 
@@ -228,8 +217,15 @@ def main() -> None:
     # 2) Retrieve experiences and build combined texts + prompt hashes in row order
     texts, prompt_infos, _ = build_texts_and_prompt_shas(args.experiences_dir, prompts_map)
 
-    # 3) Build vLLM engine and embed in batches
-    model = build_model(model_id=args.model_id, tensor_parallel_size=int(args.tensor_parallel_size))
+    # 3) Build vLLM engine directly and embed in batches
+    model = LLM(
+        model=args.model_id,
+        task="embed",
+        trust_remote_code=True,
+        tensor_parallel_size=int(args.tensor_parallel_size),
+        dtype=args.dtype,
+        gpu_memory_utilization=float(args.gpu_memory_utilization),
+    )
     eff_bs = args.batch_size if args.batch_size and args.batch_size > 0 else len(texts)
     emb = encode_texts(model, texts, batch_size=eff_bs)
 

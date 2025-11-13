@@ -13,7 +13,6 @@ from training_free_grpo.semiconductor.prompts import PROBLEM_WITH_EXPERIENCE_TEM
 from training_free_grpo.semiconductor.embeddings import (
     build_prompts_map_from_dataset,
     build_texts_and_prompt_shas,
-    build_model as build_embed_engine,
     encode_texts as encode_with_vllm,
 )
 from training_free_grpo.semiconductor.utils import read_batch_prompts
@@ -79,6 +78,7 @@ def main() -> None:
     parser.add_argument("--embed-model-id", default="Qwen/Qwen3-Embedding-8B", help="Embedding model id (must match index)")
     parser.add_argument("--embed-batch-size", type=int, default=0, help="Batch size for encoding queries (0=process all in one batch)")
     parser.add_argument("--embed-tensor-parallel-size", type=int, default=8, help="Tensor parallel size for embedding engine (vLLM)")
+    parser.add_argument("--embed-dtype", default="auto", help="dtype for embedding engine (e.g., auto, float16, bfloat16)")
 
     # Generation controls
     parser.add_argument("--max-tokens", type=int, default=16384, help="Max new tokens for generation")
@@ -86,6 +86,7 @@ def main() -> None:
     parser.add_argument("--show-reasoning", action="store_true", help="Print reasoning content if provided by endpoint")
     parser.add_argument("--model-id", default="Qwen/Qwen3-32B", help="HF model id to load with vLLM backend")
     parser.add_argument("--tensor-parallel-size", type=int, default=8, help="Tensor parallel size for generation engine (vLLM)")
+    parser.add_argument("--gen-dtype", default="auto", help="dtype for generation engine (e.g., auto, float16, bfloat16)")
     parser.add_argument("--embed-gpu-mem-frac", type=float, default=0.1, help="GPU memory fraction for embedding engine (e.g., 0.1)")
     parser.add_argument("--gen-gpu-mem-frac", type=float, default=0.8, help="GPU memory fraction for generation engine (e.g., 0.8)")
 
@@ -122,7 +123,14 @@ def main() -> None:
     assert len(prompt_infos_saved) == doc_emb.shape[0] == len(row_records), "Index misalignment"
 
     # Build embedding engine and encode queries
-    embed_engine = build_embed_engine(args.embed_model_id, tensor_parallel_size=int(args.embed_tensor_parallel_size), gpu_memory_utilization=args.embed_gpu_mem_frac)
+    embed_engine = LLM(
+        model=args.embed_model_id,
+        task="embed",
+        trust_remote_code=True,
+        tensor_parallel_size=int(args.embed_tensor_parallel_size),
+        dtype=args.embed_dtype,
+        gpu_memory_utilization=args.embed_gpu_mem_frac,
+    )
     embed_bs = args.embed_batch_size if args.embed_batch_size and args.embed_batch_size > 0 else len(queries)
     query_vecs = encode_with_vllm(embed_engine, queries, batch_size=max(1, embed_bs))
 
@@ -201,7 +209,13 @@ def main() -> None:
         temperature=args.temperature,
         max_tokens=args.max_tokens,
     )
-    vllm_llm = LLM(model=args.model_id, trust_remote_code=True, tensor_parallel_size=int(args.tensor_parallel_size), gpu_memory_utilization=args.gen_gpu_mem_frac)
+    vllm_llm = LLM(
+        model=args.model_id,
+        trust_remote_code=True,
+        tensor_parallel_size=int(args.tensor_parallel_size),
+        dtype=args.gen_dtype,
+        gpu_memory_utilization=args.gen_gpu_mem_frac,
+    )
     
     # Optionally preview the first final prompt for a batch
     try:
